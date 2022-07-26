@@ -127,6 +127,7 @@ type Project struct {
 	ApplyRequirements         []string
 	DeleteSourceBranchOnMerge *bool
 	ExecutionOrderGroup       int
+	Backend                   *string
 }
 
 // GetName returns the name of the project or an empty string if there is no
@@ -134,6 +135,14 @@ type Project struct {
 func (p Project) GetName() string {
 	if p.Name != nil {
 		return *p.Name
+	}
+	return ""
+}
+
+// GetBackendreturns the name of the backend or an empty string if there is no backend.
+func (p Project) GetBackend() string {
+	if p.Backend != nil {
+		return *p.Backend
 	}
 	return ""
 }

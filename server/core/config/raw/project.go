@@ -29,6 +29,7 @@ type Project struct {
 	ApplyRequirements         []string  `yaml:"apply_requirements,omitempty"`
 	DeleteSourceBranchOnMerge *bool     `yaml:"delete_source_branch_on_merge,omitempty"`
 	ExecutionOrderGroup       *int      `yaml:"execution_order_group,omitempty"`
+	Backend                   *string   `yaml:"backend,omitempty"`
 }
 
 func (p Project) Validate() error {
@@ -88,6 +89,8 @@ func (p Project) ToValid() valid.Project {
 	v.ApplyRequirements = p.ApplyRequirements
 
 	v.Name = p.Name
+
+	v.Backend = p.Backend
 
 	if p.DeleteSourceBranchOnMerge != nil {
 		v.DeleteSourceBranchOnMerge = p.DeleteSourceBranchOnMerge

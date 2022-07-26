@@ -37,6 +37,7 @@ func (r *RunStepRunner) Run(ctx command.ProjectContext, command string, path str
 	baseEnvVars := os.Environ()
 	customEnvVars := map[string]string{
 		"ATLANTIS_TERRAFORM_VERSION": tfVersion.String(),
+		"BACKEND":                    ctx.Backend,
 		"BASE_BRANCH_NAME":           ctx.Pull.BaseBranch,
 		"BASE_REPO_NAME":             ctx.BaseRepo.Name,
 		"BASE_REPO_OWNER":            ctx.BaseRepo.Owner,
