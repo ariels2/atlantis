@@ -38,6 +38,8 @@ import (
 	"github.com/runatlantis/atlantis/server/jobs"
 	"github.com/runatlantis/atlantis/server/metrics"
 	"github.com/runatlantis/atlantis/server/scheduled"
+	"github.com/segmentio/stats/v4"
+	"github.com/segmentio/stats/v4/datadog"
 	"github.com/uber-go/tally"
 	"github.com/uber-go/tally/prometheus"
 
@@ -195,6 +197,13 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "instantiating metrics scope")
 	}
+
+	dd := datadog.NewClientWith(datadog.ClientConfig{
+		Address:              "localhost:8125",
+		DistributionPrefixes: []string{"dist_"},
+	})
+	stats.Register(dd)
+	defer stats.Flush()
 
 	if userConfig.GithubUser != "" || userConfig.GithubAppID != 0 {
 		supportedVCSHosts = append(supportedVCSHosts, models.Github)
@@ -532,25 +541,25 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	projectCommandRunner := &events.DefaultProjectCommandRunner{
 		Locker:           projectLocker,
 		LockURLGenerator: router,
-		InitStepRunner: &runtime.InitStepRunner{
+		InitStepRunner: events.InstrumentStepRunner(&runtime.InitStepRunner{
 			TerraformExecutor: terraformClient,
 			DefaultTFVersion:  defaultTfVersion,
-		},
-		PlanStepRunner: &runtime.PlanStepRunner{
+		}, stats.DefaultEngine, "init"),
+		PlanStepRunner: events.InstrumentStepRunner(&runtime.PlanStepRunner{
 			TerraformExecutor:   terraformClient,
 			DefaultTFVersion:    defaultTfVersion,
 			CommitStatusUpdater: commitStatusUpdater,
 			AsyncTFExec:         terraformClient,
-		},
-		ShowStepRunner:        showStepRunner,
-		PolicyCheckStepRunner: policyCheckRunner,
-		ApplyStepRunner: &runtime.ApplyStepRunner{
+		}, stats.DefaultEngine, "plan"),
+		ShowStepRunner:        events.InstrumentRunner(showStepRunner, stats.DefaultEngine),
+		PolicyCheckStepRunner: events.InstrumentRunner(policyCheckRunner, stats.DefaultEngine),
+		ApplyStepRunner: events.InstrumentStepRunner(&runtime.ApplyStepRunner{
 			TerraformExecutor:   terraformClient,
 			DefaultTFVersion:    defaultTfVersion,
 			CommitStatusUpdater: commitStatusUpdater,
 			AsyncTFExec:         terraformClient,
-		},
-		RunStepRunner: runStepRunner,
+		}, stats.DefaultEngine, "apply"),
+		RunStepRunner: events.InstrumentCustomRunner(runStepRunner, stats.DefaultEngine),
 		EnvStepRunner: &runtime.EnvStepRunner{
 			RunStepRunner: runStepRunner,
 		},
@@ -844,6 +853,14 @@ func (s *Server) Start() error {
 
 	go s.ScheduledExecutorService.Run()
 
+	// Flush datadog metrics
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		for range ticker.C {
+			stats.Flush()
+		}
+	}()
+
 	go func() {
 		s.ProjectCmdOutputHandler.Handle()
 	}()
@@ -866,6 +883,7 @@ func (s *Server) Start() error {
 	<-stop
 
 	s.Logger.Warn("Received interrupt. Waiting for in-progress operations to complete")
+	stats.Flush()
 	s.waitForDrain()
 
 	// flush stats before shutdown

@@ -143,5 +143,6 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.14.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
+	github.com/segmentio/stats/v4 v4.6.3 // indirect
 	gotest.tools/v3 v3.3.0 // indirect
 )
