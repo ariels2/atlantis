@@ -1,0 +1,69 @@
+From c61e20017171b0b959a085ea4ee6d42d1b623547 Mon Sep 17 00:00:00 2001
+From: Marc Barlo <marc.barlo@segment.com>
+Date: Tue, 26 Jul 2022 17:08:01 -0700
+Subject: [PATCH] add back binary release
+
+---
+ scripts/binary-release.sh | 50 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100755 scripts/binary-release.sh
+
+diff --git a/scripts/binary-release.sh b/scripts/binary-release.sh
+new file mode 100755
+index 00000000..85cfb802
+--- /dev/null
++++ b/scripts/binary-release.sh
+@@ -0,0 +1,50 @@
++#!/bin/bash
++
++# define architecture we want to build
++XC_ARCH=${XC_ARCH:-"386 amd64 arm arm64"}
++XC_OS=${XC_OS:-linux darwin}
++XC_EXCLUDE_OSARCH="!darwin/arm !darwin/386 !darwin/arm64"
++
++# clean up
++echo "-> running clean up...."
++rm -rf output/*
++
++if ! which gox >/dev/null; then
++    echo "-> installing gox..."
++    # Need to run go get in a separate dir
++    # so it doesn't modify our go.mod.
++    SRC_DIR=$(pwd)
++    cd $(mktemp -d)
++    go mod init example.com/m
++    go get -u github.com/mitchellh/gox
++    cd "$SRC_DIR"
++fi
++
++# build
++# we want to build statically linked binaries
++export CGO_ENABLED=0
++echo "-> building..."
++gox \
++    -os="${XC_OS}" \
++    -arch="${XC_ARCH}" \
++    -osarch="${XC_EXCLUDE_OSARCH}" \
++    -output "output/{{.OS}}_{{.Arch}}/atlantis" \
++    .
++
++# Zip and copy to the dist dir
++echo ""
++echo "Packaging..."
++for PLATFORM in $(find ./output -mindepth 1 -maxdepth 1 -type d); do
++    OSARCH=$(basename ${PLATFORM})
++    echo "--> ${OSARCH}"
++
++    pushd $PLATFORM >/dev/null 2>&1
++    zip ../atlantis_${OSARCH}.zip ./*
++    popd >/dev/null 2>&1
++done
++
++echo ""
++echo ""
++echo "-----------------------------------"
++echo "Output:"
++ls -alh output/
+-- 
+2.35.1
+

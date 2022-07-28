@@ -1,0 +1,104 @@
+From f7d19e28e1d26a74dba5055f909c536db3b533fb Mon Sep 17 00:00:00 2001
+From: Marc Barlo <marc.barlo@segment.com>
+Date: Thu, 28 Jul 2022 10:05:57 -0700
+Subject: [PATCH] Add quiet policy checks feature
+
+---
+ server/controllers/events/events_controller_e2e_test.go | 1 +
+ server/events/command_runner_test.go                    | 1 +
+ server/events/policy_check_command_runner.go            | 8 +++++++-
+ server/server.go                                        | 1 +
+ server/user_config.go                                   | 1 +
+ 5 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/server/controllers/events/events_controller_e2e_test.go b/server/controllers/events/events_controller_e2e_test.go
+index cf8b2ceb..d3dee486 100644
+--- a/server/controllers/events/events_controller_e2e_test.go
++++ b/server/controllers/events/events_controller_e2e_test.go
+@@ -1007,6 +1007,7 @@ func setupE2E(t *testing.T, repoDir string) (events_controllers.VCSEventsControl
+ 		projectCommandRunner,
+ 		parallelPoolSize,
+ 		false,
++		false,
+ 	)
+ 
+ 	planCommandRunner := events.NewPlanCommandRunner(
+diff --git a/server/events/command_runner_test.go b/server/events/command_runner_test.go
+index 832e12b1..d69f178c 100644
+--- a/server/events/command_runner_test.go
++++ b/server/events/command_runner_test.go
+@@ -115,6 +115,7 @@ func setup(t *testing.T) *vcsmocks.MockClient {
+ 		projectCommandRunner,
+ 		parallelPoolSize,
+ 		false,
++		false,
+ 	)
+ 
+ 	planCommandRunner = events.NewPlanCommandRunner(
+diff --git a/server/events/policy_check_command_runner.go b/server/events/policy_check_command_runner.go
+index f82470b9..c0283aae 100644
+--- a/server/events/policy_check_command_runner.go
++++ b/server/events/policy_check_command_runner.go
+@@ -12,6 +12,7 @@ func NewPolicyCheckCommandRunner(
+ 	projectCommandRunner ProjectPolicyCheckCommandRunner,
+ 	parallelPoolSize int,
+ 	silenceVCSStatusNoProjects bool,
++	quietPolicyChecks bool,
+ ) *PolicyCheckCommandRunner {
+ 	return &PolicyCheckCommandRunner{
+ 		dbUpdater:                  dbUpdater,
+@@ -20,6 +21,7 @@ func NewPolicyCheckCommandRunner(
+ 		prjCmdRunner:               projectCommandRunner,
+ 		parallelPoolSize:           parallelPoolSize,
+ 		silenceVCSStatusNoProjects: silenceVCSStatusNoProjects,
++		quietPolicyChecks:          quietPolicyChecks,
+ 	}
+ }
+ 
+@@ -32,6 +34,7 @@ type PolicyCheckCommandRunner struct {
+ 	// SilenceVCSStatusNoProjects is whether any plan should set commit status if no projects
+ 	// are found
+ 	silenceVCSStatusNoProjects bool
++	quietPolicyChecks          bool
+ }
+ 
+ func (p *PolicyCheckCommandRunner) Run(ctx *command.Context, cmds []command.ProjectContext) {
+@@ -62,7 +65,10 @@ func (p *PolicyCheckCommandRunner) Run(ctx *command.Context, cmds []command.Proj
+ 		result = runProjectCmds(cmds, p.prjCmdRunner.PolicyCheck)
+ 	}
+ 
+-	p.pullUpdater.updatePull(ctx, PolicyCheckCommand{}, result)
++	// Quiet policy checks unless there's an error
++	if result.HasErrors() || !p.quietPolicyChecks {
++		p.pullUpdater.updatePull(ctx, PolicyCheckCommand{}, result)
++	}
+ 
+ 	pullStatus, err := p.dbUpdater.updateDB(ctx, ctx.Pull, result.ProjectResults)
+ 	if err != nil {
+diff --git a/server/server.go b/server/server.go
+index a26625c0..de8f99b9 100644
+--- a/server/server.go
++++ b/server/server.go
+@@ -607,6 +607,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
+ 		instrumentedProjectCmdRunner,
+ 		userConfig.ParallelPoolSize,
+ 		userConfig.SilenceVCSStatusNoProjects,
++		userConfig.QuietPolicyChecks,
+ 	)
+ 
+ 	planCommandRunner := events.NewPlanCommandRunner(
+diff --git a/server/user_config.go b/server/user_config.go
+index 9646c246..cfe24215 100644
+--- a/server/user_config.go
++++ b/server/user_config.go
+@@ -52,6 +52,7 @@ type UserConfig struct {
+ 	StatsNamespace             string `mapstructure:"stats-namespace"`
+ 	PlanDrafts                 bool   `mapstructure:"allow-draft-prs"`
+ 	Port                       int    `mapstructure:"port"`
++	QuietPolicyChecks          bool   `mapstructure:"quiet-policy-checks"`
+ 	RepoConfig                 string `mapstructure:"repo-config"`
+ 	RepoConfigJSON             string `mapstructure:"repo-config-json"`
+ 	RepoAllowlist              string `mapstructure:"repo-allowlist"`
+-- 
+2.35.1
+

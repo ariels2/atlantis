@@ -1,0 +1,122 @@
+From 0e429806469131f7ba4a17b18abb825c4bf87cfd Mon Sep 17 00:00:00 2001
+From: Marc Barlo <marc.barlo@segment.com>
+Date: Tue, 26 Jul 2022 15:39:06 -0700
+Subject: [PATCH] Add a backend flag at the repo yaml level
+
+---
+ server/core/config/raw/project.go                | 3 +++
+ server/core/config/valid/global_cfg.go           | 2 ++
+ server/core/config/valid/repo_cfg.go             | 9 +++++++++
+ server/core/runtime/run_step_runner.go           | 1 +
+ server/events/command/project_context.go         | 2 ++
+ server/events/project_command_context_builder.go | 1 +
+ 6 files changed, 18 insertions(+)
+
+diff --git a/server/core/config/raw/project.go b/server/core/config/raw/project.go
+index 13a0a1d4..41a7c50e 100644
+--- a/server/core/config/raw/project.go
++++ b/server/core/config/raw/project.go
+@@ -29,6 +29,7 @@ type Project struct {
+ 	ApplyRequirements         []string  `yaml:"apply_requirements,omitempty"`
+ 	DeleteSourceBranchOnMerge *bool     `yaml:"delete_source_branch_on_merge,omitempty"`
+ 	ExecutionOrderGroup       *int      `yaml:"execution_order_group,omitempty"`
++	Backend                   *string   `yaml:"backend,omitempty"`
+ }
+ 
+ func (p Project) Validate() error {
+@@ -89,6 +90,8 @@ func (p Project) ToValid() valid.Project {
+ 
+ 	v.Name = p.Name
+ 
++	v.Backend = p.Backend
++
+ 	if p.DeleteSourceBranchOnMerge != nil {
+ 		v.DeleteSourceBranchOnMerge = p.DeleteSourceBranchOnMerge
+ 	}
+diff --git a/server/core/config/valid/global_cfg.go b/server/core/config/valid/global_cfg.go
+index 6fcad2cc..75320741 100644
+--- a/server/core/config/valid/global_cfg.go
++++ b/server/core/config/valid/global_cfg.go
+@@ -85,6 +85,7 @@ type MergedProjectCfg struct {
+ 	PolicySets                PolicySets
+ 	DeleteSourceBranchOnMerge bool
+ 	ExecutionOrderGroup       int
++	Backend                   string
+ }
+ 
+ // WorkflowHook is a map of custom run commands to run before or after workflows.
+@@ -310,6 +311,7 @@ func (g GlobalCfg) MergeProjectCfg(log logging.SimpleLogging, repoID string, pro
+ 		PolicySets:                g.PolicySets,
+ 		DeleteSourceBranchOnMerge: deleteSourceBranchOnMerge,
+ 		ExecutionOrderGroup:       proj.ExecutionOrderGroup,
++		Backend:                   proj.GetBackend(),
+ 	}
+ }
+ 
+diff --git a/server/core/config/valid/repo_cfg.go b/server/core/config/valid/repo_cfg.go
+index eab85c1f..d117d0f3 100644
+--- a/server/core/config/valid/repo_cfg.go
++++ b/server/core/config/valid/repo_cfg.go
+@@ -127,6 +127,7 @@ type Project struct {
+ 	ApplyRequirements         []string
+ 	DeleteSourceBranchOnMerge *bool
+ 	ExecutionOrderGroup       int
++	Backend                   *string
+ }
+ 
+ // GetName returns the name of the project or an empty string if there is no
+@@ -138,6 +139,14 @@ func (p Project) GetName() string {
+ 	return ""
+ }
+ 
++// GetBackendreturns the name of the backend or an empty string if there is no backend.
++func (p Project) GetBackend() string {
++	if p.Backend != nil {
++		return *p.Backend
++	}
++	return ""
++}
++
+ type Autoplan struct {
+ 	WhenModified []string
+ 	Enabled      bool
+diff --git a/server/core/runtime/run_step_runner.go b/server/core/runtime/run_step_runner.go
+index c0a4d53e..83f581ae 100644
+--- a/server/core/runtime/run_step_runner.go
++++ b/server/core/runtime/run_step_runner.go
+@@ -37,6 +37,7 @@ func (r *RunStepRunner) Run(ctx command.ProjectContext, command string, path str
+ 	baseEnvVars := os.Environ()
+ 	customEnvVars := map[string]string{
+ 		"ATLANTIS_TERRAFORM_VERSION": tfVersion.String(),
++		"BACKEND":                    ctx.Backend,
+ 		"BASE_BRANCH_NAME":           ctx.Pull.BaseBranch,
+ 		"BASE_REPO_NAME":             ctx.BaseRepo.Name,
+ 		"BASE_REPO_OWNER":            ctx.BaseRepo.Owner,
+diff --git a/server/events/command/project_context.go b/server/events/command/project_context.go
+index d8c9310b..ac4d333c 100644
+--- a/server/events/command/project_context.go
++++ b/server/events/command/project_context.go
+@@ -91,6 +91,8 @@ type ProjectContext struct {
+ 	JobID string
+ 	// The index of order group. Before planning/applying it will use to sort projects. Default is 0.
+ 	ExecutionOrderGroup int
++	// Backend is the name of the backend we're using
++	Backend string
+ }
+ 
+ // SetScope sets the scope of the stats object field. Note: we deliberately set this on the value
+diff --git a/server/events/project_command_context_builder.go b/server/events/project_command_context_builder.go
+index c15a1e92..256efa5f 100644
+--- a/server/events/project_command_context_builder.go
++++ b/server/events/project_command_context_builder.go
+@@ -266,6 +266,7 @@ func newProjectCommandContext(ctx *command.Context,
+ 		PullReqStatus:              pullStatus,
+ 		JobID:                      uuid.New().String(),
+ 		ExecutionOrderGroup:        projCfg.ExecutionOrderGroup,
++		Backend:                    projCfg.Backend,
+ 	}
+ }
+ 
+-- 
+2.35.1
+

@@ -1,0 +1,450 @@
+From 8fcdffcc31f01631a46884705ed3051de1cddf55 Mon Sep 17 00:00:00 2001
+From: Marc Barlo <marc.barlo@segment.com>
+Date: Tue, 26 Jul 2022 17:06:05 -0700
+Subject: [PATCH] add forked statsd metrics via segment stats package
+
+---
+ go.mod                                |   1 +
+ go.sum                                |  11 ++
+ server/events/command_metrics.go      | 140 ++++++++++++++++++++++++
+ server/events/command_metrics_test.go | 148 ++++++++++++++++++++++++++
+ server/server.go                      |  36 +++++--
+ 5 files changed, 327 insertions(+), 9 deletions(-)
+ create mode 100644 server/events/command_metrics.go
+ create mode 100644 server/events/command_metrics_test.go
+
+diff --git a/go.mod b/go.mod
+index bbe575ee..01d5223c 100644
+--- a/go.mod
++++ b/go.mod
+@@ -143,5 +143,6 @@ require (
+ 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
+ 	github.com/onsi/ginkgo v1.14.0 // indirect
+ 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
++	github.com/segmentio/stats/v4 v4.6.3 // indirect
+ 	gotest.tools/v3 v3.3.0 // indirect
+ )
+diff --git a/go.sum b/go.sum
+index efbefde2..bcd2c474 100644
+--- a/go.sum
++++ b/go.sum
+@@ -400,6 +400,9 @@ github.com/matttproud/golang_protobuf_extensions v1.0.1 h1:4hp9jkHxhMHkqkrB3Ix0j
+ github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
+ github.com/mcdafydd/go-azuredevops v0.12.1 h1:WxwLVyGuJ8oL7uWQp1/J6GefX1wMQQZUHWRGsrm+uE8=
+ github.com/mcdafydd/go-azuredevops v0.12.1/go.mod h1:B4UDyn7WEj1/97f45j3VnzEfkWKe05+/dCcAPdOET4A=
++github.com/mdlayher/genetlink v0.0.0-20190313224034-60417448a851/go.mod h1:EsbsAEUEs15qC1cosAwxgCWV0Qhd8TmkxnA9Kw1Vhl4=
++github.com/mdlayher/netlink v0.0.0-20190313131330-258ea9dff42c/go.mod h1:eQB3mZE4aiYnlUsyGGCOpPETfdQq4Jhsgf1fk3cwQaA=
++github.com/mdlayher/taskstats v0.0.0-20190313225729-7cbba52ee072/go.mod h1:sGdS7A6CAETR53zkdjGkgoFlh1vSm7MtX+i8XfEsTMA=
+ github.com/microcosm-cc/bluemonday v1.0.19 h1:OI7hoF5FY4pFz2VA//RN8TfM0YJ2dJcl4P4APrCWy6c=
+ github.com/microcosm-cc/bluemonday v1.0.19/go.mod h1:QNzV2UbLK2/53oIIwTOyLUSABMkjZ4tqiyC1g/DyqxE=
+ github.com/miekg/dns v1.1.26/go.mod h1:bPDLeHnStXmXAq1m/Ch/hvfNHr14JKNPMBo3VZKjuso=
+@@ -493,6 +496,13 @@ github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQD
+ github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
+ github.com/sagikazarmark/crypt v0.6.0/go.mod h1:U8+INwJo3nBv1m6A/8OBXAq7Jnpspk5AxSgDyEQcea8=
+ github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
++github.com/segmentio/fasthash v0.0.0-20180216231524-a72b379d632e/go.mod h1:tm/wZFQ8e24NYaBGIlnO2WGCAi67re4HHuOm0sftE/M=
++github.com/segmentio/objconv v1.0.1/go.mod h1:auayaH5k3137Cl4SoXTgrzQcuQDmvuVtZgS0fb1Ahys=
++github.com/segmentio/stats v3.0.0+incompatible h1:YGWv6X5GH3Eb+ML1QasqzYESSZsiNQBp8Yx15M4bXz4=
++github.com/segmentio/stats v3.0.0+incompatible/go.mod h1:ZkGKMkt6GVRIsV5Biy4HotVqonMWEsr+uMtOD2NBDeU=
++github.com/segmentio/stats/v4 v4.6.3 h1:Eqxr1x3Ri57FXqCCvQg9WNBlKFeUf2RhrKKnUiXhZFw=
++github.com/segmentio/stats/v4 v4.6.3/go.mod h1:gycE91tyiQw6xg3MT674cVi+CfQ69qHsoNNhXG0C7YQ=
++github.com/segmentio/vpcinfo v0.1.10/go.mod h1:KEIWiWRE/KLh90mOzOY0QkFWT7ObUYLp978tICtquqU=
+ github.com/sergi/go-diff v1.0.0 h1:Kpca3qRNrduNnOQeazBd0ysaKrUJiIuISHxogkT9RPQ=
+ github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
+ github.com/shopspring/decimal v1.2.0 h1:abSATXmQEYyShuxI4/vyW3tV1MrKAJzCZ/0zLUXYbsQ=
+@@ -640,6 +650,7 @@ golang.org/x/net v0.0.0-20181114220301-adae6a3d119a/go.mod h1:mL1N/T3taQHkDXs73r
+ golang.org/x/net v0.0.0-20190108225652-1e06a53dbb7e/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+ golang.org/x/net v0.0.0-20190213061140-3a22650c66bd/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+ golang.org/x/net v0.0.0-20190311183353-d8887717615a/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
++golang.org/x/net v0.0.0-20190313220215-9f648a60d977/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
+ golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
+ golang.org/x/net v0.0.0-20190501004415-9ce7a6920f09/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
+ golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
+diff --git a/server/events/command_metrics.go b/server/events/command_metrics.go
+new file mode 100644
+index 00000000..6cd4ba98
+--- /dev/null
++++ b/server/events/command_metrics.go
+@@ -0,0 +1,140 @@
++package events
++
++import (
++	"strings"
++	"time"
++
++	"github.com/runatlantis/atlantis/server/core/runtime"
++	"github.com/runatlantis/atlantis/server/events/command"
++	"github.com/segmentio/stats/v4"
++)
++
++type instrumentedStepRunner struct {
++	stats  *stats.Engine
++	runner StepRunner
++	step   string
++}
++
++type instrumentedCustomRunner struct {
++	stats  *stats.Engine
++	runner CustomStepRunner
++}
++
++type instrumentedRunner struct {
++	stats  *stats.Engine
++	runner runtime.Runner
++}
++
++// InstrumentStepRunner wraps step runners to provide metrics for: init, plan, and apply steps
++func InstrumentStepRunner(runner StepRunner, eng *stats.Engine, step string) StepRunner {
++	return &instrumentedStepRunner{
++		stats:  eng,
++		runner: runner,
++		step:   step,
++	}
++}
++
++// InstrumentCustomRunner wraps step runners to provide metrics for: run steps
++func InstrumentCustomRunner(runner CustomStepRunner, eng *stats.Engine) CustomStepRunner {
++	return &instrumentedCustomRunner{
++		stats:  eng,
++		runner: runner,
++	}
++}
++
++// InstrumentRunner wraps the show and policy runners to provide metrics for: policy and show steps
++func InstrumentRunner(runner runtime.Runner, eng *stats.Engine) runtime.Runner {
++	return &instrumentedRunner{
++		stats:  eng,
++		runner: runner,
++	}
++}
++
++func (ic *instrumentedStepRunner) Run(ctx command.ProjectContext, extraArgs []string, path string, envs map[string]string) (string, error) {
++	start := time.Now()
++	var tfVersion string
++	if ctx.TerraformVersion != nil {
++		tfVersion = ctx.TerraformVersion.String()
++	}
++
++	tags := []stats.Tag{
++		{Name: "step", Value: ic.step},
++		{Name: "command", Value: ctx.CommandName.String()},
++		{Name: "workspace", Value: ctx.Workspace},
++		{Name: "terraform_version", Value: tfVersion},
++	}
++
++	out, err := ic.runner.Run(ctx, extraArgs, path, envs)
++	if err != nil {
++		tags = append(tags, stats.Tag{Name: "error_type", Value: errorTag(out)})
++
++		ic.stats.Incr("steps.error", tags...)
++		return out, err
++	}
++	ic.stats.ClockAt("dist_duration", start, tags...).Stop()
++	ic.stats.Incr("steps.success", tags...)
++	return out, err
++}
++
++func (ic *instrumentedCustomRunner) Run(ctx command.ProjectContext, cmd string, path string, envs map[string]string, streamOutput bool) (string, error) {
++	start := time.Now()
++	var tfVersion string
++	if ctx.TerraformVersion != nil {
++		tfVersion = ctx.TerraformVersion.String()
++	}
++
++	tags := []stats.Tag{
++		{Name: "step", Value: "run"},
++		{Name: "command", Value: ctx.CommandName.String()},
++		{Name: "workspace", Value: ctx.Workspace},
++		{Name: "terraform_version", Value: tfVersion},
++	}
++
++	out, err := ic.runner.Run(ctx, cmd, path, envs, streamOutput)
++	if err != nil {
++		ic.stats.Incr("steps.error", tags...)
++		return out, err
++	}
++	ic.stats.ClockAt("dist_duration", start, tags...).Stop()
++	ic.stats.Incr("steps.success", tags...)
++	return out, err
++}
++
++func (ic *instrumentedRunner) Run(ctx command.ProjectContext, extraArgs []string, path string, envs map[string]string) (string, error) {
++	start := time.Now()
++	var tfVersion string
++	if ctx.TerraformVersion != nil {
++		tfVersion = ctx.TerraformVersion.String()
++	}
++
++	tags := []stats.Tag{
++		{Name: "step", Value: "run"},
++		{Name: "command", Value: ctx.CommandName.String()},
++		{Name: "workspace", Value: ctx.Workspace},
++		{Name: "terraform_version", Value: tfVersion},
++	}
++
++	out, err := ic.runner.Run(ctx, extraArgs, path, envs)
++	if err != nil {
++		ic.stats.Incr("steps.error", tags...)
++		return out, err
++	}
++	ic.stats.ClockAt("dist_duration", start, tags...).Stop()
++	ic.stats.Incr("steps.success", tags...)
++	return out, err
++}
++
++// TODO: Make this list a configurable map
++func errorTag(output string) string {
++	if strings.Contains(output, "TLS handshake timeout") {
++		return "tls"
++	} else if strings.Contains(output, "error initializing backend") {
++		return "tls"
++	} else if strings.Contains(output, "failed to execute \"bash\"") {
++		return "bash"
++	} else if strings.Contains(output, "Could not satisfy plugin requirements") {
++		return "plugins"
++	} else {
++		return "other"
++	}
++}
+diff --git a/server/events/command_metrics_test.go b/server/events/command_metrics_test.go
+new file mode 100644
+index 00000000..903f4865
+--- /dev/null
++++ b/server/events/command_metrics_test.go
+@@ -0,0 +1,148 @@
++package events
++
++import (
++	"errors"
++	"reflect"
++	"testing"
++
++	"github.com/hashicorp/go-version"
++	"github.com/runatlantis/atlantis/server/events/command"
++	"github.com/segmentio/stats/v4"
++	"github.com/segmentio/stats/v4/statstest"
++)
++
++type stepRunner struct{}
++
++func (c *stepRunner) Run(ctx command.ProjectContext, extraArgs []string, path string, envs map[string]string) (string, error) {
++	return "success", nil
++}
++
++type errStepRunner struct{}
++
++func (c *errStepRunner) Run(ctx command.ProjectContext, extraArgs []string, path string, envs map[string]string) (string, error) {
++	return "TLS handshake timeout", errors.New("error")
++}
++
++func TestInstrumentation(t *testing.T) {
++	tests := []struct {
++		scenario string
++		function func(*testing.T, *stats.Engine)
++	}{
++		{
++			scenario: "failing calls to ListRecentBuilds reports error metric",
++			function: testStepRunError,
++		},
++		{
++			scenario: "successful calls to Run reports timing and success metrics",
++			function: testStepRunSuccess,
++		},
++	}
++
++	for _, test := range tests {
++		testFunc := test.function
++		t.Run(test.scenario, func(t *testing.T) {
++			t.Parallel()
++			h := &statstest.Handler{}
++			testFunc(t, stats.NewEngine("test", h))
++		})
++	}
++}
++
++func testStepRunSuccess(t *testing.T, eng *stats.Engine) {
++	ic := InstrumentStepRunner(&stepRunner{}, eng, "plan")
++	tfVersion, _ := version.NewVersion("0.12.18")
++	projectContext := command.ProjectContext{
++		CommandName:      command.Plan,
++		Workspace:        "test-workspace",
++		TerraformVersion: tfVersion,
++	}
++	ic.Run(projectContext, nil, "/path", nil)
++
++	found := measures(t, eng)
++	if len(found) != 2 {
++		t.Fatalf("expected 2 measures got %d", len(found))
++	}
++
++	checkHistogramEqual(t, found[0], stats.Measure{
++		Name:   "test",
++		Fields: []stats.Field{stats.MakeField("dist_duration", 1, stats.Histogram)},
++		Tags: []stats.Tag{
++			{Name: "command", Value: "plan"},
++			{Name: "stamp", Value: "total"},
++			{Name: "step", Value: "plan"},
++			{Name: "terraform_version", Value: "0.12.18"},
++			{Name: "workspace", Value: "test-workspace"},
++		},
++	})
++
++	checkCounterEqual(t, found[1], stats.Measure{
++		Name:   "test.steps",
++		Fields: []stats.Field{stats.MakeField("success", 1, stats.Counter)},
++		Tags: []stats.Tag{
++			{Name: "command", Value: "plan"},
++			{Name: "step", Value: "plan"},
++			{Name: "terraform_version", Value: "0.12.18"},
++			{Name: "workspace", Value: "test-workspace"},
++		},
++	})
++}
++
++func testStepRunError(t *testing.T, eng *stats.Engine) {
++	ic := InstrumentStepRunner(&errStepRunner{}, eng, "plan")
++	tfVersion, _ := version.NewVersion("0.12.18")
++	projectContext := command.ProjectContext{
++		CommandName:      command.Plan,
++		Workspace:        "test-workspace",
++		TerraformVersion: tfVersion,
++	}
++	ic.Run(projectContext, nil, "/path", nil)
++
++	found := measures(t, eng)
++	if len(found) != 1 {
++		t.Fatalf("expected 1 measures got %d", len(found))
++	}
++
++	checkCounterEqual(t, found[0], stats.Measure{
++		Name:   "test.steps",
++		Fields: []stats.Field{stats.MakeField("error", 1, stats.Counter)},
++		Tags: []stats.Tag{
++			{Name: "command", Value: "plan"},
++			{Name: "error_type", Value: "tls"},
++			{Name: "step", Value: "plan"},
++			{Name: "terraform_version", Value: "0.12.18"},
++			{Name: "workspace", Value: "test-workspace"},
++		},
++	})
++}
++
++func checkCounterEqual(t *testing.T, found, expected stats.Measure) {
++	if !reflect.DeepEqual(found, expected) {
++		t.Error("bad measures:")
++		t.Logf("expected: %#v", expected)
++		t.Logf("found:    %#v", found)
++	}
++}
++
++func checkHistogramEqual(t *testing.T, found, expected stats.Measure) {
++	if found.Name != expected.Name {
++		t.Error("bad histogram name:")
++		t.Logf("expected: %s", expected.Name)
++		t.Logf("found:    %s", found.Name)
++	}
++	for i, f := range found.Fields {
++		if f.Name != expected.Fields[i].Name {
++			t.Error("bad histogram field name:")
++			t.Logf("expected: %#v", expected.Fields[i].Name)
++			t.Logf("found:    %#v", f.Name)
++		}
++	}
++	if !reflect.DeepEqual(found.Tags, expected.Tags) {
++		t.Error("bad histogram tags:")
++		t.Logf("expected: %#v", expected.Tags)
++		t.Logf("found:    %#v", found.Tags)
++	}
++}
++
++func measures(t *testing.T, eng *stats.Engine) []stats.Measure {
++	return eng.Handler.(*statstest.Handler).Measures()
++}
+diff --git a/server/server.go b/server/server.go
+index 31afea1f..a26625c0 100644
+--- a/server/server.go
++++ b/server/server.go
+@@ -38,6 +38,8 @@ import (
+ 	"github.com/runatlantis/atlantis/server/jobs"
+ 	"github.com/runatlantis/atlantis/server/metrics"
+ 	"github.com/runatlantis/atlantis/server/scheduled"
++	"github.com/segmentio/stats/v4"
++	"github.com/segmentio/stats/v4/datadog"
+ 	"github.com/uber-go/tally"
+ 	"github.com/uber-go/tally/prometheus"
+ 
+@@ -196,6 +198,13 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
+ 		return nil, errors.Wrapf(err, "instantiating metrics scope")
+ 	}
+ 
++	dd := datadog.NewClientWith(datadog.ClientConfig{
++		Address:              "localhost:8125",
++		DistributionPrefixes: []string{"dist_"},
++	})
++	stats.Register(dd)
++	defer stats.Flush()
++
+ 	if userConfig.GithubUser != "" || userConfig.GithubAppID != 0 {
+ 		supportedVCSHosts = append(supportedVCSHosts, models.Github)
+ 		if userConfig.GithubUser != "" {
+@@ -532,25 +541,25 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
+ 	projectCommandRunner := &events.DefaultProjectCommandRunner{
+ 		Locker:           projectLocker,
+ 		LockURLGenerator: router,
+-		InitStepRunner: &runtime.InitStepRunner{
++		InitStepRunner: events.InstrumentStepRunner(&runtime.InitStepRunner{
+ 			TerraformExecutor: terraformClient,
+ 			DefaultTFVersion:  defaultTfVersion,
+-		},
+-		PlanStepRunner: &runtime.PlanStepRunner{
++		}, stats.DefaultEngine, "init"),
++		PlanStepRunner: events.InstrumentStepRunner(&runtime.PlanStepRunner{
+ 			TerraformExecutor:   terraformClient,
+ 			DefaultTFVersion:    defaultTfVersion,
+ 			CommitStatusUpdater: commitStatusUpdater,
+ 			AsyncTFExec:         terraformClient,
+-		},
+-		ShowStepRunner:        showStepRunner,
+-		PolicyCheckStepRunner: policyCheckRunner,
+-		ApplyStepRunner: &runtime.ApplyStepRunner{
++		}, stats.DefaultEngine, "plan"),
++		ShowStepRunner:        events.InstrumentRunner(showStepRunner, stats.DefaultEngine),
++		PolicyCheckStepRunner: events.InstrumentRunner(policyCheckRunner, stats.DefaultEngine),
++		ApplyStepRunner: events.InstrumentStepRunner(&runtime.ApplyStepRunner{
+ 			TerraformExecutor:   terraformClient,
+ 			DefaultTFVersion:    defaultTfVersion,
+ 			CommitStatusUpdater: commitStatusUpdater,
+ 			AsyncTFExec:         terraformClient,
+-		},
+-		RunStepRunner: runStepRunner,
++		}, stats.DefaultEngine, "apply"),
++		RunStepRunner: events.InstrumentCustomRunner(runStepRunner, stats.DefaultEngine),
+ 		EnvStepRunner: &runtime.EnvStepRunner{
+ 			RunStepRunner: runStepRunner,
+ 		},
+@@ -844,6 +853,14 @@ func (s *Server) Start() error {
+ 
+ 	go s.ScheduledExecutorService.Run()
+ 
++	// Flush datadog metrics
++	go func() {
++		ticker := time.NewTicker(time.Second * 10)
++		for range ticker.C {
++			stats.Flush()
++		}
++	}()
++
+ 	go func() {
+ 		s.ProjectCmdOutputHandler.Handle()
+ 	}()
+@@ -866,6 +883,7 @@ func (s *Server) Start() error {
+ 	<-stop
+ 
+ 	s.Logger.Warn("Received interrupt. Waiting for in-progress operations to complete")
++	stats.Flush()
+ 	s.waitForDrain()
+ 
+ 	// flush stats before shutdown
+-- 
+2.35.1
+
